@@ -1,0 +1,71 @@
+ - name: Configure Alpha RTL8812AU AWUS036ACH Hotspot burp
+   hosts: localhost
+   vars:
+     interface:
+     con_name:
+     password:
+     burp_ip:
+     burp_port:
+   collections:
+     - community.general.nmcli
+   tasks:
+    # Alpha driver install
+    # https://docs.alfa.com.tw/Support/Linux/RTL8812AU/#ubuntu
+    - name: "[Alpha] Install Driver Dependencies"
+      apt:
+        name:
+          - git
+          - build-essential
+
+    - name: "[Alpha] Clone Driver Repo"
+      git:
+        dest: /tmp/alpha-driver
+        repo: https://github.com/aircrack-ng/rtl8812au.git
+
+    - name: "[Alpha] Run Make"
+      make:
+        chdir: /tmp/alpha-driver
+
+    - name: "[Alpha] Run Make Install"
+      make:
+        chdir: /tmp/alpha-driver
+        target: install
+      become: true
+
+    - name: "[Alpha] Check Driver Install"
+      find:
+        patterns: "88XXau.ko"
+        recurse: true
+        use_regex: true
+        paths:
+          - /lib/modules/
+      register: result_driver
+
+    - name: "[Alpha] Fail on driver not found"
+      fail:
+        msg: "Failed to install driver check the /tmp/alpha-driver directory"
+      when: "result_driver.matched <= 0"
+
+      #Device setup
+    - name: "[Hotspot] Fail on device not set"
+      fail:
+        msg: "The playbook cannot automatically detect device name. Please set the interface variable"
+      when: "not interface"
+
+    - name: "[Hotspot] NMCLI add wifi"
+      community.general.nmcli:
+        type: wifi
+        wifi:
+          mode: ap
+          band: bg
+        conn_name: "{{ con_name }}"
+        ifname: "{{ interface }}"
+        ssid: "{{ con_name }}"
+        method4: shared
+        wifi_sec:
+          psk: "{{ password }}"
+          key-mgmt: wpa-psk
+        autoconnect: true
+        state: present
+    #iptables
+
